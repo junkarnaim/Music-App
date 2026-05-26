@@ -185,70 +185,74 @@ app.get("/api/spotify/config", async (req, res) => {
   });
 });
 
+// Helper to generate sandbox mock tracks for offline or premium-restricted credentials gracefully
+function getSandboxTracks(query: string) {
+  const sandboxTracks = [
+    {
+      id: "spotify-sandbox-1",
+      title: "Starlight Neon (Catalog Fallback)",
+      artist: "Sunset Driver",
+      album_img: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=400&auto=format&fit=crop&q=60",
+      preview_url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
+      external_url: "https://open.spotify.com",
+      bpm: 100,
+      mood: "Retro",
+      description: "A cozy streaming synth track from our remote database index.",
+      isSpotify: true
+    },
+    {
+      id: "spotify-sandbox-2",
+      title: "Lo-Fi Coffee Shop (Catalog Fallback)",
+      artist: "Study Beats Collective",
+      album_img: "https://images.unsplash.com/photo-1501386761578-eac5c94b800a?w=400&auto=format&fit=crop&q=60",
+      preview_url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
+      external_url: "https://open.spotify.com",
+      bpm: 80,
+      mood: "Dreamy",
+      description: "Mellow dusty crackle tracks for coding and relaxing.",
+      isSpotify: true
+    },
+    {
+      id: "spotify-sandbox-3",
+      title: "Digital Rain Forest (Catalog Fallback)",
+      artist: "The Biomes",
+      album_img: "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=400&auto=format&fit=crop&q=60",
+      preview_url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3",
+      external_url: "https://open.spotify.com",
+      bpm: 65,
+      mood: "Peaceful",
+      description: "Generative organic nature soundscapes and soft synth echoes.",
+      isSpotify: true
+    }
+  ];
+
+  if (!query) return sandboxTracks;
+  const filtered = sandboxTracks.filter(
+    (t) => 
+      t.title.toLowerCase().includes(query.toLowerCase()) || 
+      t.artist.toLowerCase().includes(query.toLowerCase())
+  );
+  return filtered.length > 0 ? filtered : sandboxTracks;
+}
+
 // Endpoint to Search Spotify tracks or yield Sandbox tracks if secrets are unconfigured
 app.get("/api/spotify/search", async (req, res) => {
+  const query = (req.query.q as string) || "";
+  const customClientId = req.query.clientId as string;
+  const customClientSecret = req.query.clientSecret as string;
+
+  if (!query.trim()) {
+    return res.status(400).json({ error: "Missing query parameter 'q'" });
+  }
+
   try {
-    const query = req.query.q as string;
-    const customClientId = req.query.clientId as string;
-    const customClientSecret = req.query.clientSecret as string;
-
-    if (!query) {
-      return res.status(400).json({ error: "Missing query parameter 'q'" });
-    }
-
     const token = await getSpotifyToken(customClientId, customClientSecret);
     if (!token) {
-      // Unconfigured or error: return sandbox songs to represent beautiful offline search experience
-      console.log("Spotify unconfigured - returning Sandbox fallback tracks for queries");
-      const sandboxTracks = [
-        {
-          id: "spotify-sandbox-1",
-          title: "Starlight Neon (Catalog Stream)",
-          artist: "Sunset Driver",
-          album_img: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=400&auto=format&fit=crop&q=60",
-          preview_url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
-          external_url: "https://open.spotify.com",
-          bpm: 100,
-          mood: "Retro",
-          description: "A cozy streaming synth track from our remote database index.",
-          isSpotify: true
-        },
-        {
-          id: "spotify-sandbox-2",
-          title: "Lo-Fi Coffee Shop (Catalog Stream)",
-          artist: "Study Beats Collective",
-          album_img: "https://images.unsplash.com/photo-1501386761578-eac5c94b800a?w=400&auto=format&fit=crop&q=60",
-          preview_url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
-          external_url: "https://open.spotify.com",
-          bpm: 80,
-          mood: "Dreamy",
-          description: "Mellow dusty crackle tracks for coding and relaxing.",
-          isSpotify: true
-        },
-        {
-          id: "spotify-sandbox-3",
-          title: "Digital Rain Forest (Catalog Stream)",
-          artist: "The Biomes",
-          album_img: "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=400&auto=format&fit=crop&q=60",
-          preview_url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3",
-          external_url: "https://open.spotify.com",
-          bpm: 65,
-          mood: "Peaceful",
-          description: "Generative organic nature soundscapes and soft synth echoes.",
-          isSpotify: true
-        }
-      ];
-
-      // Simple keyword matching for demo results
-      const filtered = sandboxTracks.filter(
-        (t) => 
-          t.title.toLowerCase().includes(query.toLowerCase()) || 
-          t.artist.toLowerCase().includes(query.toLowerCase())
-      );
-      
+      console.log("Spotify unconfigured or token failed - returning Sandbox fallback tracks for queries");
       return res.json({ 
         isSandbox: true, 
-        tracks: filtered.length > 0 ? filtered : sandboxTracks 
+        tracks: getSandboxTracks(query),
+        warning: "Spotify API credentials invalid, unconfigured, or expired. Reverted to Catalog Sandbox fallback."
       });
     }
 
@@ -264,7 +268,20 @@ app.get("/api/spotify/search", async (req, res) => {
 
     if (!response.ok) {
       const errText = await response.text();
-      throw new Error(`Spotify Web Search API responded with status ${response.status}: ${errText}`);
+      console.warn(`Spotify API error returned status ${response.status}:`, errText);
+      
+      let warningMessage = `Spotify API returned status ${response.status}. Reverted to Catalog Sandbox fallback.`;
+      if (response.status === 403) {
+        warningMessage = "Spotify developer restriction (403 Forbidden): Premium subscription ownership required. Reverted to Sandbox catalog.";
+      } else if (response.status === 401) {
+        warningMessage = "Spotify access unauthorized (401): Please verify developer client keys.";
+      }
+      
+      return res.json({
+        isSandbox: true,
+        tracks: getSandboxTracks(query),
+        warning: warningMessage
+      });
     }
 
     const data: any = await response.json();
@@ -300,7 +317,11 @@ app.get("/api/spotify/search", async (req, res) => {
     return res.json({ isSandbox: false, tracks: finalTracks });
   } catch (error: any) {
     console.error("Spotify Search controller failed:", error);
-    return res.status(500).json({ error: error.message || "Failed to search Spotify" });
+    return res.json({
+      isSandbox: true,
+      tracks: getSandboxTracks(query),
+      warning: `Internal Search exception: ${error.message || error}. Reverted to Catalog Sandbox.`
+    });
   }
 });
 

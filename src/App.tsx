@@ -28,7 +28,8 @@ import {
   Key,
   ExternalLink,
   Lock,
-  Settings
+  Settings,
+  AlertTriangle
 } from "lucide-react";
 
 export default function App() {
@@ -52,6 +53,7 @@ export default function App() {
 
   // Core floating header-bar search states
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
+  const [spotifyApiWarning, setSpotifyApiWarning] = useState<string | null>(null);
 
   // Audio and visual playback synchronization states
   const [playing, setPlaying] = useState(false);
@@ -151,6 +153,7 @@ export default function App() {
     if (!queryToUse.trim()) return;
 
     setIsSpotifySearching(true);
+    setSpotifyApiWarning(null); // Clear previous warning
     try {
       const url = new URL("/api/spotify/search", window.location.origin);
       url.searchParams.append("q", queryToUse.trim());
@@ -167,8 +170,12 @@ export default function App() {
       }
       const data = await res.json();
       setSpotifyResults(data.tracks || []);
-    } catch (err) {
+      if (data.warning) {
+        setSpotifyApiWarning(data.warning);
+      }
+    } catch (err: any) {
       console.error("Spotify search trigger error:", err);
+      setSpotifyApiWarning(err.message || "Failed to contact search service.");
     } finally {
       setIsSpotifySearching(false);
     }
@@ -413,7 +420,7 @@ export default function App() {
 
           {/* Cascading Floating Dropdown Results Menu */}
           {showSearchDropdown && (spotifySearchQuery.trim() || spotifyResults.length > 0) && (
-            <div className="absolute top-[44px] left-0 right-0 max-h-[380px] overflow-y-auto bg-[#0d0d17]/98 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.85)] p-3 space-y-2 z-50">
+            <div className="absolute top-[44px] left-0 right-0 max-h-[380px] overflow-y-auto bg-[#0d0d17]/98 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.85)] p-3 space-y-2.5 z-50">
               <div className="flex items-center justify-between border-b border-white/5 pb-1.5 px-1 select-none">
                 <span className="text-[10px] font-mono font-semibold text-emerald-400 flex items-center gap-1 uppercase">
                   <Globe className="w-3 h-3 animate-pulse" />
@@ -427,6 +434,22 @@ export default function App() {
                   Close
                 </button>
               </div>
+
+              {/* Graceful Developer Premium Subscription Warning display */}
+              {spotifyApiWarning && (
+                <div className="p-2.5 bg-amber-500/10 border border-amber-500/25 rounded-xl text-[10px] text-amber-300 flex flex-col gap-1 select-none leading-relaxed animate-fade-in">
+                  <div className="flex items-center gap-1.5 font-semibold">
+                    <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 text-amber-400" />
+                    <span>Spotify Sandbox Active</span>
+                  </div>
+                  <p className="text-white/60 text-[9px]">
+                    {spotifyApiWarning}
+                  </p>
+                  <div className="text-[8px] text-white/40 mt-0.5 border-t border-white/5 pt-1">
+                    We've auto-mapped search keywords to the sandbox playbacks. Use virtual synths to play or jam!
+                  </div>
+                </div>
+              )}
 
               {isSpotifySearching ? (
                 <div className="text-center py-8 text-xs text-white/40 flex flex-col items-center justify-center gap-1.5 font-mono">
