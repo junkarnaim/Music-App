@@ -1,0 +1,8 @@
+{
+  "name": "Remix: Music Streaming \u0026 AI Composer App",
+  "description": "Interactive music streaming platform featuring handcrafted lo-fi, synthwave, and ambient tracks synthesized in-browser, custom playlist creation, dynamic canvas audio visualizers, and an AI Composer powered by Gemini to craft original melodies, rhythms, and lyrics on demand.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
